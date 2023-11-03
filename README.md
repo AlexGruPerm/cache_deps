@@ -1,2 +1,2 @@
 # cache_deps
-Universal Ref (cats-effec) cache with dependensies
+Universal in memory cache with dependensies (based on cats-effects Ref). 
