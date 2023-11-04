@@ -1,13 +1,10 @@
-import cats.effect.{IO, IOApp}
-import cats.effect.{IO, IOApp, Sync}
+import cats.effect.IO.sleep
+import cats.effect.{IO, Sync}
 import cats.effect.kernel.Ref
 import cats.syntax.all._
 import cats.effect.std.Console
-import java.util.Timer
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
-import scala.collection.immutable.IntMap
 
+import scala.collection.immutable.IntMap
 import scala.concurrent.duration.FiniteDuration
 
 object CacheImpl{
@@ -26,66 +23,63 @@ object CacheImpl{
    */
   class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Sync[F]) {
 
-    def get(key: Int): F[Option[_]] =
-      ref.get.map(_.cacheEntities.get(key))
+    def getDepends(): F[SetDependObjectName] =
+      ref.get.map(_.depends)
 
-    /**
-     * Save one element CacheEntity into Cache.
-     */
-    def save(entity: CacheEntity[B]): F[Unit] =
-      ref.get.flatMap{cache =>
-        ref.set{
-          cache.copy(
-            setDependObjects = cache.setDependObjects ++ entity.setDependObjects,
-            cacheEntities = cache.cacheEntities.updated(entity.hashCode(), entity)
-          )
-        }
-      }
+    def get(key: Int): F[Option[_]] =
+      ref.get.map(_.entities.get(key))
+
+    def save(entities: Seq[CacheEntity[B]]): F[Unit] =
+      ref.get.flatMap { cache =>
+        ref.set {
+          cache.copy(entities.foldLeft(cache.entities){
+              case (cacheEntities,entityToSave) => cacheEntities.updated(entityToSave.hashCode(),entityToSave)
+            })
+        }}
 
     def size(): F[Int] =
-      ref.get.map(_.cacheEntities.size)
+      ref.get.map(_.entities.size)
 
-    private def remove(key: Int): F[Unit] =
+    def remove(key: Int): F[Unit] =
       ref.get.flatMap{cache =>
         ref.set{
-          cache.copy(
-            setDependObjects = cache.setDependObjects,
-            cacheEntities = cache.cacheEntities -key)
+          cache.copy(entities = cache.entities - key)
         }
       }
 
-    def update(key: Int, entity: CacheEntity[B]): F[Unit] =
+    /**
+     * Receive set of changed object from "external system" and remove related CacheEntity
+     * from Cache.
+    */
+    private def maintenance(set: SetDependObjectName): F[Unit] =
       for {
-        _ <- remove(key)
-        _ <- save(entity)
+        cache <- ref.get
+        entities = cache.entities
+        newEntities = entities.filterNot(cacheEntity => set.exists(ch => cacheEntity._2.depends.contains(ch)))
+        _ <- ref.set(cache.copy(entities = newEntities))
       } yield ()
 
-    def saveEntitiesInCache(entities: List[CacheEntity[B]]): F[Unit] ={
-      import cats.implicits._
-      entities.map(save).sequence.map(_ => ())
-    }
 
-    /*
-    private def maintenance(seq: Set[DependObjectName]): IO[Unit] =
-      ???
-      */
-
-    private def logChangedObjects(seq: Set[DependObjectName]): IO[Unit] =
-      seq.foreach(Console[IO].println).pure[IO]
+    /**
+     * Return true if in Cache.depends exist at least one element from set (list of changed objects)
+    */
+    private def dependsExists(set: SetDependObjectName): F[Boolean] =
+      for {
+        dependencies <- getDepends()
+        isExist = set.exists(ch => dependencies.contains(ch))
+      } yield isExist
 
     /**
      * Repeat function f with delay and if it returns non empty Set
      * make some maintenance actions (F.e. clean Cache from some elements - CacheEntity).
      */
-    def checkDependentObjectChanges(delay: FiniteDuration, f: IO[Unit] => IO[Set[DependObjectName]]): IO[Unit] =
+    def dependsChanged(delay: FiniteDuration, f: IO[Unit] => F[SetDependObjectName]): F[Unit] =
       for {
-        _ <- IO.sleep(delay)
+        _ <- sleep(delay).pure[F]
         seq <- f(().pure[IO])
-        //todo: remove output
-        _ <- Console[IO].println(s"checkDependentObjectChanges seq.size = ${seq.size}")
-        _ <- logChangedObjects(seq).whenA(seq.nonEmpty)
-        //_ <- maintenance(seq).whenA(seq.nonEmpty)
-        _ <- checkDependentObjectChanges(delay, f)
+        depExists <- dependsExists(seq)
+        _ <- maintenance(seq).whenA(depExists)
+        _ <- dependsChanged(delay, f)
       } yield ()
 
   }

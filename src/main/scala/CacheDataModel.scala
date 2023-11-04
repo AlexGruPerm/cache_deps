@@ -2,9 +2,17 @@ import scala.collection.immutable.IntMap
 
 object CacheDataModel {
   type DependObjectName = String
-  case class CacheEntity[T](data: T, setDependObjects: Set[DependObjectName])
+  type SetDependObjectName = Set[DependObjectName]
 
-  case class Cache[T](setDependObjects: Set[DependObjectName] = Set.empty,
-                      cacheEntities: IntMap[CacheEntity[T]] = IntMap.empty)
+  case class CacheEntity[T](data: T, depends: SetDependObjectName)
+
+  case class Cache[T](entities: IntMap[CacheEntity[T]] = IntMap.empty){
+
+    val depends: SetDependObjectName =
+      entities.values.foldLeft(Set.empty[DependObjectName]) {
+        case (r, c) => r ++ c.depends
+      }
+
+  }
 
 }
