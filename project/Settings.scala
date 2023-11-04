@@ -31,7 +31,7 @@ object Dependencies {
   val testDependencies = Seq(
     "org.scalacheck" %% "scalacheck"          % Versions.scalacheck,
     "org.typelevel"  %% "scalacheck-effect"   % Versions.scalacheckEffectVersion,
-    "org.typelevel"  %% "scalacheck-effect-munit" % Versions.scalacheckEffectVersion
+    "org.typelevel"  %% "munit-cats-effect" % Versions.munitCatsEffect
   ).map(_ % Test)
 }
 
@@ -41,5 +41,5 @@ object Versions {
   val catsEffect              = "3.4.8"
   val scalacheckEffectVersion = "1.0.4"
   val scalacheck              = "1.15.4"
-  val munitCatsEffect         = "2.0.0-M1"
+  val munitCatsEffect         = "2.0.0-M3"
 }
