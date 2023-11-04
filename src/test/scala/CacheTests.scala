@@ -1,7 +1,6 @@
 import CacheDataModel.{Cache, CacheEntity, SetDependObjectName}
 import CacheImpl.RefCache
 import cats.effect.IO
-import cats.effect.IO.sleep
 import munit.CatsEffectSuite
 import cats.syntax.all._
 import cats.effect.kernel.Ref
@@ -11,9 +10,6 @@ import scala.concurrent.duration._
 
 
 class CacheTests extends CatsEffectSuite {
-
-  private val changeChecker: IO[Unit] => IO[SetDependObjectName] = _ =>
-    Set("t_sys", "t_session","t_users","t_privs").pure[IO]
 
   private val users = List(
     CacheEntity(User(1, "John", 34), Set("t_sys", "t_session")),
@@ -121,6 +117,27 @@ class CacheTests extends CatsEffectSuite {
     } yield (cacheSizeBefore,cacheSizeAfter,cacheSizeAfter2)).map(res => assertEquals(res, (3,1,0)))
   }
 
+  test("9) Single save into Cache with 3 elements. Size=4") {
+    (for {
+      ref <- Ref[IO].of(Cache[User]())
+      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      _ <- cache.save(users)
+      _ <- cache.save(List(CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))))
+      cacheSize <- cache.size()
+    } yield cacheSize).map(s => assertEquals(s, 4))
+  }
+
+  test("10) Single save into Cache with 3 elements. And get this CacheEntity.") {
+    val user = CacheEntity(User(10, "John", 64),Set("t_sys", "t_session"))
+    (for {
+      ref <- Ref[IO].of(Cache[User]())
+      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      _ <- cache.save(users)
+      _ <- cache.save(List(user))
+      cacheSize <- cache.size()
+      element <- cache.get(user.hashCode())
+    } yield (cacheSize,element)).map(s => assertEquals(s, (4,Some(user))))
+  }
 
 
 }

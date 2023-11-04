@@ -2,9 +2,6 @@ import cats.effect.IO.sleep
 import cats.effect.{IO, Sync}
 import cats.effect.kernel.Ref
 import cats.syntax.all._
-import cats.effect.std.Console
-
-import scala.collection.immutable.IntMap
 import scala.concurrent.duration.FiniteDuration
 
 object CacheImpl{
@@ -26,7 +23,17 @@ object CacheImpl{
     def getDepends(): F[SetDependObjectName] =
       ref.get.map(_.depends)
 
-    def get(key: Int): F[Option[_]] =
+/*    private def updateGetCount(key: Int): F[Unit] = //().pure[F]
+      get(key).map{opt =>
+        opt.map{ce =>
+          ce.copy(getCount = ce.getCount+1)
+        }.map{
+          updatedCacheEntity => save(List(updatedCacheEntity))
+        }
+      }
+*/
+    def get(key: Int): F[Option[CacheEntity[B]]] =
+      //updateGetCount(key) *>
       ref.get.map(_.entities.get(key))
 
     def save(entities: Seq[CacheEntity[B]]): F[Unit] =

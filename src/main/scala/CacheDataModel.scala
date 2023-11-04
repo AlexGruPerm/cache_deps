@@ -4,7 +4,12 @@ object CacheDataModel {
   type DependObjectName = String
   type SetDependObjectName = Set[DependObjectName]
 
-  case class CacheEntity[T](data: T, depends: SetDependObjectName)
+  /**
+   * data: T - abstract data, we don't care about structure.
+   * depends: - Set of strings, names of objects this Entity depends of.
+   * getCount - number of Cache.get calls.
+  */
+  case class CacheEntity[T](data: T, depends: SetDependObjectName, getCount: Int = 0)
 
   case class Cache[T](entities: IntMap[CacheEntity[T]] = IntMap.empty){
 
