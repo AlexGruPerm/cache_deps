@@ -21,14 +21,14 @@ object Settings {
 }
 
 object Dependencies {
-  val cats = Seq(
+  val cats: Seq[ModuleID] = Seq(
     "org.typelevel" %% "cats-core"   % Versions.catsCore,
     "org.typelevel" %% "cats-effect" % Versions.catsEffect
   )
 
-  val dependencies = cats
+  val dependencies: Seq[ModuleID] = cats
 
-  val testDependencies = Seq(
+  val testDependencies: Seq[ModuleID] = Seq(
     "org.scalacheck" %% "scalacheck"          % Versions.scalacheck,
     "org.typelevel"  %% "scalacheck-effect"   % Versions.scalacheckEffectVersion,
     "org.typelevel"  %% "munit-cats-effect" % Versions.munitCatsEffect
@@ -38,7 +38,7 @@ object Dependencies {
 object Versions {
   val scala                   = "2.13.1"
   val catsCore                = "2.10.0"
-  val catsEffect              = "3.4.8"
+  val catsEffect              = "3.5.2"
   val scalacheckEffectVersion = "1.0.4"
   val scalacheck              = "1.15.4"
   val munitCatsEffect         = "2.0.0-M3"

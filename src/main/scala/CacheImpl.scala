@@ -3,7 +3,7 @@ import cats.effect.IO.sleep
 import cats.effect.{IO, Sync}
 import cats.effect.kernel.Ref
 import cats.syntax.all._
-import common.currentTime
+import Common.currentTime
 
 import scala.concurrent.duration.FiniteDuration
 

@@ -20,14 +20,6 @@ class CacheTests extends CatsEffectSuite {
     CacheEntity(User(3, "Anna", 22), Set.empty)
   )
 
-  /** todo
-   * make separated method parametrized in common case for eliminating
-   * .....
-   * ref <- Ref[IO].of(Cache[User]())
-   * cache = new RefCache[IO, CacheEntity[User], User](ref)
-   * ....
-   */
-
   def createAndGetCache[A] :IO[RefCache[IO, CacheEntity[A],A]] =
   for {
      ref <- Ref[IO].of(Cache[A]())
@@ -291,5 +283,53 @@ class CacheTests extends CatsEffectSuite {
       ).map(s => assertEquals(s, (Some(true),Some(true))))
   }
 
+  test("17) Cache dependsChanged works forever without cancellation. Look test 18 also.") {
+    val users = List(
+      CacheEntity(User(1, "John", 34), Set("t_sys", "t_session")),
+      CacheEntity(User(2, "Mark", 40), Set("t_users", "t_sys")),
+      CacheEntity(User(3, "Anna", 22), Set("t_sys", "t_roles"))
+    )
+
+    val f: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys","t_session","t_users","t_roles").pure[IO]
+
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(users)
+      cacheSize1 <- cache.size()
+      _ <- cache.dependsChanged(2.seconds, f).foreverM.start
+      cacheSize2 <- cache.size()
+      _ <- IO.sleep(3.seconds)
+      cacheSize3 <- cache.size()
+    } yield (cacheSize1, cacheSize2, cacheSize3 )).map{res =>
+      assertEquals(res, (3,3,0))
+    }
+  }
+
+  test("18) Cache dependsChanged cancellation. Look test 17 also.") {
+    val users = List(
+      CacheEntity(User(1, "John", 34), Set("t_sys", "t_session")),
+      CacheEntity(User(2, "Mark", 40), Set("t_users", "t_sys")),
+      CacheEntity(User(3, "Anna", 22), Set("t_sys", "t_roles"))
+    )
+
+    val f: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys", "t_session", "t_users", "t_roles").pure[IO]
+
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(users)
+      cacheSize1 <- cache.size()
+      fiber <- cache.dependsChanged(2.seconds, f).foreverM.start
+      cacheSize2 <- cache.size()
+      _ <- IO.sleep(3.seconds)
+      cacheSize3 <- cache.size()
+      _ <- fiber.cancel
+      _ <- cache.save(users)
+      cacheSize4 <- cache.size()
+      _ <- IO.sleep(2.seconds)
+      cacheSize5 <- cache.size()
+    } yield (cacheSize1, cacheSize2, cacheSize3, cacheSize4, cacheSize5)).map { res =>
+      assertEquals(res, (3,3,0, 3,3 ))
+    }
+  }
 
 }
