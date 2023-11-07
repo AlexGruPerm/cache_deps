@@ -89,7 +89,7 @@ class CacheTests extends CatsEffectSuite {
       ref <- Ref[IO].of(Cache[User]())
       cache = new RefCache[IO, CacheEntity[User], User](ref)
       _ <- cache.save(userList)
-      cacheDepends <- cache.getDepends()
+      cacheDepends <- cache.getDepends
     } yield cacheDepends).map(deps => assertEquals(deps, usersDeps))
   }
 
@@ -109,10 +109,10 @@ class CacheTests extends CatsEffectSuite {
       _ <- cache.save(usersLocal)
       cacheSizeBefore <- cache.size()
       _ <- cache.dependsChanged(1.seconds,funcChangeChecker).foreverM.start
-      _ <- IO.sleep(4.seconds)
+      _ <- IO.sleep(2.seconds)
       cacheSizeAfter <- cache.size()
       _ <- cache.dependsChanged(1.seconds,funcChangeChecker2).foreverM.start
-      _ <- IO.sleep(2.seconds)
+      _ <- IO.sleep(1.seconds)
       cacheSizeAfter2 <- cache.size()
     } yield (cacheSizeBefore,cacheSizeAfter,cacheSizeAfter2)).map(res => assertEquals(res, (3,1,0)))
   }
@@ -137,6 +137,43 @@ class CacheTests extends CatsEffectSuite {
       cacheSize <- cache.size()
       element <- cache.get(user.hashCode())
     } yield (cacheSize,element)).map(s => assertEquals(s, (4,Some(user))))
+  }
+
+
+  test("11) counterGet = 0 and then 1 for newly added element with first getting.") {
+    val user = CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))
+    val keyUser = user.hashCode()
+    (for {
+      ref <- Ref[IO].of(Cache[User]())
+      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cacheSizeEmpty <- cache.size()
+      _ <- cache.save(List(user))
+      cacheSize <- cache.size()
+      userFromCache <- cache.get(keyUser)
+      userMetaFromCache <- cache.getMeta(keyUser)
+    } yield (cacheSizeEmpty, cacheSize, userMetaFromCache.map(_.counterGet), userFromCache)).map{ s =>
+      assertEquals(s, (0, 1, Some(1), Some(user)))
+    }
+  }
+
+  test("12) counterGet = 5 for repeating cache.get(keyUser).") {
+    val user = CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))
+    val keyUser = user.hashCode()
+    (for {
+      ref <- Ref[IO].of(Cache[User]())
+      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cacheSizeEmpty <- cache.size()
+      _ <- cache.save(List(user))
+      cacheSize <- cache.size()
+      _ <- cache.get(keyUser)
+      _ <- cache.get(keyUser)
+      _ <- cache.get(keyUser)
+      _ <- cache.get(keyUser)
+      userFromCache <- cache.get(keyUser)
+      userMetaFromCache <- cache.getMeta(keyUser)
+    } yield (cacheSizeEmpty, cacheSize, userMetaFromCache.map(_.counterGet), userFromCache)).map{ s =>
+      assertEquals(s, (0, 1, Some(5), Some(user)))
+    }
   }
 
 

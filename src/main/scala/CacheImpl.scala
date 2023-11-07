@@ -1,7 +1,9 @@
+import CacheDataModel.CacheEntity
 import cats.effect.IO.sleep
 import cats.effect.{IO, Sync}
 import cats.effect.kernel.Ref
 import cats.syntax.all._
+
 import scala.concurrent.duration.FiniteDuration
 
 object CacheImpl{
@@ -20,28 +22,44 @@ object CacheImpl{
    */
   class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Sync[F]) {
 
-    def getDepends(): F[SetDependObjectName] =
+    def getDepends: F[SetDependObjectName] =
       ref.get.map(_.depends)
 
-/*    private def updateGetCount(key: Int): F[Unit] = //().pure[F]
-      get(key).map{opt =>
-        opt.map{ce =>
-          ce.copy(getCount = ce.getCount+1)
-        }.map{
-          updatedCacheEntity => save(List(updatedCacheEntity))
+    private def saveMetaForGet(key: Int): F[Unit] =
+      ref.get.flatMap { cache =>
+        ref.set {
+          cache.copy(
+                entitiesMeta = cache.entitiesMeta.get(key).foldLeft(cache.entitiesMeta) {
+                case (cacheEntitiesMeta, entityMetaToSave) =>
+                  cacheEntitiesMeta.updated(key, entityMetaToSave.copy(counterGet = entityMetaToSave.counterGet + 1))
+              }
+            )
         }
       }
-*/
+
     def get(key: Int): F[Option[CacheEntity[B]]] =
-      //updateGetCount(key) *>
-      ref.get.map(_.entities.get(key))
+      for {
+       ce <- ref.get.map(cache => cache.entities.get(key))
+        _ <- saveMetaForGet(key).whenA(ce.isDefined)
+      } yield ce
+
+    def getMeta(key: Int): F[Option[CacheEntityMeta]] =
+      ref.get.map(_.entitiesMeta.get(key))
 
     def save(entities: Seq[CacheEntity[B]]): F[Unit] =
       ref.get.flatMap { cache =>
         ref.set {
-          cache.copy(entities.foldLeft(cache.entities){
-              case (cacheEntities,entityToSave) => cacheEntities.updated(entityToSave.hashCode(),entityToSave)
-            })
+          cache.copy(
+            entities = entities.foldLeft(cache.entities){
+              case (cacheEntities,entityToSave) =>
+                cacheEntities.updated(entityToSave.hashCode(),entityToSave)
+            },
+            entitiesMeta = entities.foldLeft(cache.entitiesMeta) {
+              case (cacheEntitiesMeta, entityToSave) =>
+                cacheEntitiesMeta.updated(entityToSave.hashCode(),
+                  CacheEntityMeta())
+            }
+          )
         }}
 
     def size(): F[Int] =
@@ -72,7 +90,7 @@ object CacheImpl{
     */
     private def dependsExists(set: SetDependObjectName): F[Boolean] =
       for {
-        dependencies <- getDepends()
+        dependencies <- getDepends
         isExist = set.exists(ch => dependencies.contains(ch))
       } yield isExist
 
