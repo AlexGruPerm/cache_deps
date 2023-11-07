@@ -4,12 +4,13 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import cats.syntax.all._
 import cats.effect.kernel.Ref
-import data.User
 
 import scala.concurrent.duration._
 
 
 class CacheTests extends CatsEffectSuite {
+
+  case class User(id: Int, name: String, age: Int)
 
   private val users = List(
     CacheEntity(User(1, "John", 34), Set("t_sys", "t_session")),
@@ -173,6 +174,83 @@ class CacheTests extends CatsEffectSuite {
       userMetaFromCache <- cache.getMeta(keyUser)
     } yield (cacheSizeEmpty, cacheSize, userMetaFromCache.map(_.counterGet), userFromCache)).map{ s =>
       assertEquals(s, (0, 1, Some(5), Some(user)))
+    }
+  }
+
+  test("13) 2 Objects in Cache. Different counterGet(s). Cache size. Emtpty.  ") {
+    val user1 = CacheEntity(User(10, "John", 64), Set("t_sys"))
+    val keyUser1 = user1.hashCode()
+
+    val user2 = CacheEntity(User(20, "Mary", 25), Set("t_session"))
+    val keyUser2 = user2.hashCode()
+
+    val funcChangeChecker:  IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys","t_session").pure[IO]
+
+    case class TestCheck(
+                          initCacheSize: Int,
+                          cacheSizeUser1Added: Int,
+                          cacheSizeUser2Added: Int,
+                          counterGetUser1_2gets: Option[Int],
+                          counterGetUser2_4gets: Option[Int],
+                          endCacheSize: Int
+                        )
+
+    (for {
+      ref <- Ref[IO].of(Cache[User]())
+      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cacheSizeEmpty <- cache.size()
+      _ <- cache.save(List(user1))
+      cacheSizeUser1Added <- cache.size()
+      _ <- cache.save(List(user2))
+      cacheSizeUser2Added <- cache.size()
+      _ <- cache.get(keyUser1)
+      _ <- cache.get(keyUser1)
+        _ <- cache.get(keyUser2)
+        _ <- cache.get(keyUser2)
+        _ <- cache.get(keyUser2)
+        _ <- cache.get(keyUser2)
+      counterGetUser1_2gets <- cache.getMeta(keyUser1)
+      counterGetUser2_4gets <- cache.getMeta(keyUser2)
+
+      _ <- cache.dependsChanged(1.seconds, funcChangeChecker).foreverM.start
+      _ <- IO.sleep(2.seconds)
+      endCacheSize <- cache.size()
+
+    } yield TestCheck(
+                        cacheSizeEmpty,
+                        cacheSizeUser1Added,
+                        cacheSizeUser2Added,
+                        counterGetUser1_2gets.map(_.counterGet),
+                        counterGetUser2_4gets.map(_.counterGet),
+                        endCacheSize
+                      )).map{ s =>
+      assertEquals(s, TestCheck(0,1,2, Some(2),Some(4), 0))
+    }
+  }
+
+  test("14) tsCreate not changed in meta and tsLru changing.  ") {
+    val user1 = CacheEntity(User(10, "John", 64), Set("t_sys"))
+    val keyUser1 = user1.hashCode()
+
+    (for {
+      ref <- Ref[IO].of(Cache[User]())
+      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      _ <- cache.save(List(user1))
+      m1 <- cache.getMeta(keyUser1)
+      _ <- cache.get(keyUser1)
+      _ <- cache.get(keyUser1)
+      m2 <- cache.getMeta(keyUser1)
+      _ <- cache.get(keyUser1)
+      _ <- cache.get(keyUser1)
+      m3 <- cache.getMeta(keyUser1)
+    } yield (m3.map(_.counterGet),
+             m1.map(_.tsCreate) == m2.map(_.tsCreate),
+             m2.map(_.tsCreate) == m3.map(_.tsCreate),
+             m1.map(_.tsLru) < m2.map(_.tsLru),
+             m2.map(_.tsLru) < m3.map(_.tsLru)
+    )
+      ).map { s =>
+      assertEquals(s, (Some(4),true,true,true,true))
     }
   }
 

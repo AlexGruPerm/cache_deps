@@ -22,6 +22,8 @@ object CacheImpl{
    */
   class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Sync[F]) {
 
+    private def currentTime: Long = System.currentTimeMillis()
+
     def getDepends: F[SetDependObjectName] =
       ref.get.map(_.depends)
 
@@ -31,7 +33,8 @@ object CacheImpl{
           cache.copy(
                 entitiesMeta = cache.entitiesMeta.get(key).foldLeft(cache.entitiesMeta) {
                 case (cacheEntitiesMeta, entityMetaToSave) =>
-                  cacheEntitiesMeta.updated(key, entityMetaToSave.copy(counterGet = entityMetaToSave.counterGet + 1))
+                  cacheEntitiesMeta.updated(key, entityMetaToSave.copy(counterGet = entityMetaToSave.counterGet + 1,
+                    tsLru = currentTime))
               }
             )
         }
