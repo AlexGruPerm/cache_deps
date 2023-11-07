@@ -1,4 +1,5 @@
 import scala.collection.immutable.IntMap
+import common._
 
 object CacheDataModel {
   type TimeStamp = Long
@@ -16,9 +17,12 @@ object CacheDataModel {
    * Pair case class for CacheEntity,
    * contains meta information about CacheEntity.
   */
-  case class CacheEntityMeta(tsCreate: TimeStamp = System.currentTimeMillis(),
-                             tsLru: TimeStamp = System.currentTimeMillis(),
-                             counterGet: Int = 0)
+  case class CacheEntityMeta(tsCreate: TimeStamp = currentTime,
+                             tsLru: TimeStamp = currentTime,
+                             counterGet: Int = 0){
+    def getLifetime: TimeStamp = currentTime - tsCreate
+    def getLruTime: TimeStamp = currentTime - tsLru
+  }
 
   case class Cache[T](entities: IntMap[CacheEntity[T]] = IntMap.empty,
                       entitiesMeta: IntMap[CacheEntityMeta] = IntMap.empty){

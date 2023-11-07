@@ -1,9 +1,11 @@
 import CacheDataModel.{Cache, CacheEntity, SetDependObjectName}
 import CacheImpl.RefCache
 import cats.effect.IO
+import cats.effect.IO.sleep
 import munit.CatsEffectSuite
 import cats.syntax.all._
 import cats.effect.kernel.Ref
+import org.junit.Ignore
 
 import scala.concurrent.duration._
 
@@ -18,18 +20,30 @@ class CacheTests extends CatsEffectSuite {
     CacheEntity(User(3, "Anna", 22), Set.empty)
   )
 
+  /** todo
+   * make separated method parametrized in common case for eliminating
+   * .....
+   * ref <- Ref[IO].of(Cache[User]())
+   * cache = new RefCache[IO, CacheEntity[User], User](ref)
+   * ....
+   */
+
+  def createAndGetCache[A] :IO[RefCache[IO, CacheEntity[A],A]] =
+  for {
+     ref <- Ref[IO].of(Cache[A]())
+     cache = new RefCache[IO, CacheEntity[A], A](ref)
+  } yield cache
+
   test("1) New Cache is empty.") {
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       cacheSize <- cache.size()
     } yield cacheSize).map(s => assertEquals(s, 0))
   }
 
   test("2) 3 elements added to Cache.") {
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(users)
       cacheSize <- cache.size()
     } yield cacheSize).map(s => assertEquals(s, 3))
@@ -38,8 +52,7 @@ class CacheTests extends CatsEffectSuite {
   test("3) 3 elements added to Cache and removed. Check size = 0.") {
     import cats.implicits._
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(users)
       _ <- users.map(user => cache.remove(user.hashCode())).sequence.map(_ => ())
       cacheSize <- cache.size()
@@ -50,8 +63,7 @@ class CacheTests extends CatsEffectSuite {
     val john = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
     val keyJohn = john.hashCode()
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       userJohn <- cache.get(keyJohn)
     } yield userJohn).map(s => assertEquals(s, None))
   }
@@ -60,8 +72,7 @@ class CacheTests extends CatsEffectSuite {
     val john = CacheEntity(User(1, "John", 34),Set("t_sys","t_session"))
     val keyJohn = john.hashCode()
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(users)
       userJohn <- cache.get(keyJohn)
     } yield userJohn).map(s => assertEquals(s, Some(john)))
@@ -72,8 +83,7 @@ class CacheTests extends CatsEffectSuite {
     val keyJohn = john.hashCode()
     val failJohn = CacheEntity(User(10, "John", 44), Set("t_sys"))
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(users)
       userJohn <- cache.get(keyJohn)
     } yield userJohn).map(s => assertNotEquals(s, Some(failJohn)))
@@ -87,8 +97,7 @@ class CacheTests extends CatsEffectSuite {
     )
     val usersDeps: SetDependObjectName = Set("t_sys","t_session","t_users","t_privs")
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(userList)
       cacheDepends <- cache.getDepends
     } yield cacheDepends).map(deps => assertEquals(deps, usersDeps))
@@ -105,8 +114,7 @@ class CacheTests extends CatsEffectSuite {
     val funcChangeChecker2: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_roles").pure[IO]
 
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(usersLocal)
       cacheSizeBefore <- cache.size()
       _ <- cache.dependsChanged(1.seconds,funcChangeChecker).foreverM.start
@@ -120,8 +128,7 @@ class CacheTests extends CatsEffectSuite {
 
   test("9) Single save into Cache with 3 elements. Size=4") {
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(users)
       _ <- cache.save(List(CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))))
       cacheSize <- cache.size()
@@ -131,8 +138,7 @@ class CacheTests extends CatsEffectSuite {
   test("10) Single save into Cache with 3 elements. And get this CacheEntity.") {
     val user = CacheEntity(User(10, "John", 64),Set("t_sys", "t_session"))
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(users)
       _ <- cache.save(List(user))
       cacheSize <- cache.size()
@@ -145,8 +151,7 @@ class CacheTests extends CatsEffectSuite {
     val user = CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))
     val keyUser = user.hashCode()
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       cacheSizeEmpty <- cache.size()
       _ <- cache.save(List(user))
       cacheSize <- cache.size()
@@ -161,8 +166,7 @@ class CacheTests extends CatsEffectSuite {
     val user = CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))
     val keyUser = user.hashCode()
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       cacheSizeEmpty <- cache.size()
       _ <- cache.save(List(user))
       cacheSize <- cache.size()
@@ -196,8 +200,7 @@ class CacheTests extends CatsEffectSuite {
                         )
 
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       cacheSizeEmpty <- cache.size()
       _ <- cache.save(List(user1))
       cacheSizeUser1Added <- cache.size()
@@ -233,8 +236,7 @@ class CacheTests extends CatsEffectSuite {
     val keyUser1 = user1.hashCode()
 
     (for {
-      ref <- Ref[IO].of(Cache[User]())
-      cache = new RefCache[IO, CacheEntity[User], User](ref)
+      cache <- createAndGetCache[User]
       _ <- cache.save(List(user1))
       m1 <- cache.getMeta(keyUser1)
       _ <- cache.get(keyUser1)
@@ -252,6 +254,41 @@ class CacheTests extends CatsEffectSuite {
       ).map { s =>
       assertEquals(s, (Some(4),true,true,true,true))
     }
+  }
+
+
+  test("15) None tsCreateTime on empty Cache") {
+    val user = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
+    val key = user.hashCode()
+    (for {
+      cache <- createAndGetCache[User]
+      m <- cache.getMeta(key)
+      size <- cache.size()
+    } yield (size, m.map(_.tsCreate))
+      ).map(s =>
+      assertEquals(s,(0, None)))
+  }
+
+  //  test("xyz".ignore)
+  //  test("xyz".only)
+  test("16) get entity lifetime > 1 sec., > 3 sec.") {
+    val user = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
+    val key = user.hashCode()
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(List(user))
+      mBefore <- cache.getMeta(key)
+      _ <- sleep(1.seconds)
+      _ <- cache.get(key)
+      mAfter1Sec <- cache.getMeta(key)
+       _ <- sleep(3.seconds)
+      _ <- cache.get(key)
+      mAfter3Sec <- cache.getMeta(key)
+    } yield (
+        mAfter1Sec.flatMap(c => mBefore.map(a => (c.tsLru - a.tsCreate) > 1000L && (c.tsLru - a.tsCreate) < 1200L)),
+        mAfter3Sec.flatMap(c => mAfter1Sec.map(a => (c.tsLru - a.tsLru) > 3000L && (c.tsLru - a.tsLru) < 3200L ))
+    )
+      ).map(s => assertEquals(s, (Some(true),Some(true))))
   }
 
 
