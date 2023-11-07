@@ -3,7 +3,8 @@ import cats.effect.IO.sleep
 import cats.effect.{IO, Sync}
 import cats.effect.kernel.Ref
 import cats.syntax.all._
-import Common.currentTime
+//import Common.currentTime
+import Common.currTimeMcSec
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -27,16 +28,18 @@ object CacheImpl{
       ref.get.map(_.depends)
 
     private def saveMetaForGet(key: Int): F[Unit] =
-      ref.get.flatMap { cache =>
-        ref.set {
-          cache.copy(
-                entitiesMeta = cache.entitiesMeta.get(key).foldLeft(cache.entitiesMeta) {
+      currTimeMcSec.flatMap { ct =>
+        ref.get.flatMap { cache =>
+          ref.set {
+            cache.copy(
+              entitiesMeta = cache.entitiesMeta.get(key).foldLeft(cache.entitiesMeta) {
                 case (cacheEntitiesMeta, entityMetaToSave) =>
                   cacheEntitiesMeta.updated(key,
                     entityMetaToSave.copy(counterGet = entityMetaToSave.counterGet + 1,
-                    tsLru = currentTime))
+                      tsLru = ct.length))
               }
             )
+          }
         }
       }
 
@@ -50,6 +53,7 @@ object CacheImpl{
       ref.get.map(_.entitiesMeta.get(key))
 
     def save(entities: Seq[CacheEntity[B]]): F[Unit] =
+      currTimeMcSec[F].flatMap { ct =>
       ref.get.flatMap { cache =>
         ref.set {
           cache.copy(
@@ -60,10 +64,10 @@ object CacheImpl{
             entitiesMeta = entities.foldLeft(cache.entitiesMeta) {
               case (cacheEntitiesMeta, entityToSave) =>
                 cacheEntitiesMeta.updated(entityToSave.hashCode(),
-                  CacheEntityMeta())
+                  CacheEntityMeta(ct.length,ct.length))
             }
           )
-        }}
+        }}}
 
     def size(): F[Int] =
       ref.get.map(_.entities.size)

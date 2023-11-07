@@ -1,5 +1,9 @@
 import scala.collection.immutable.IntMap
+import cats.effect._
+import cats.syntax.all._
+import scala.concurrent.duration.MILLISECONDS
 import Common._
+
 
 object CacheDataModel {
   type TimeStamp = Long
@@ -17,8 +21,8 @@ object CacheDataModel {
    * Pair case class for CacheEntity,
    * contains meta information about CacheEntity.
   */
-  case class CacheEntityMeta(tsCreate: TimeStamp = currentTime,
-                             tsLru: TimeStamp = currentTime,
+  case class CacheEntityMeta(tsCreate: TimeStamp,
+                             tsLru: TimeStamp,
                              counterGet: Int = 0)
 
   case class Cache[T](entities: IntMap[CacheEntity[T]] = IntMap.empty,

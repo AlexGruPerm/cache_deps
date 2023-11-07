@@ -1,12 +1,17 @@
 import CacheDataModel.{Cache, CacheEntity, SetDependObjectName}
 import CacheImpl.RefCache
+import Common.currTimeMcSec
 import cats.effect.IO
 import cats.effect.IO.sleep
 import munit.CatsEffectSuite
 import cats.syntax.all._
 import cats.effect.kernel.Ref
 import org.junit.Ignore
+import cats.effect._
+import cats.syntax.all._
 
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 
 
@@ -25,6 +30,12 @@ class CacheTests extends CatsEffectSuite {
      ref <- Ref[IO].of(Cache[A]())
      cache = new RefCache[IO, CacheEntity[A], A](ref)
   } yield cache
+
+  test("0) CE Clock check.") {
+    (for {
+      ct <- currTimeMcSec[IO]
+    } yield (ct.length > 1000000000000000L,ct.unit)).map(s => assertEquals(s, (true,TimeUnit.MICROSECONDS)))
+  }
 
   test("1) New Cache is empty.") {
     (for {
@@ -233,7 +244,11 @@ class CacheTests extends CatsEffectSuite {
       m1 <- cache.getMeta(keyUser1)
       _ <- cache.get(keyUser1)
       _ <- cache.get(keyUser1)
+      _ <- cache.get(keyUser1)
+      _ <- cache.get(keyUser1)
       m2 <- cache.getMeta(keyUser1)
+      _ <- cache.get(keyUser1)
+      _ <- cache.get(keyUser1)
       _ <- cache.get(keyUser1)
       _ <- cache.get(keyUser1)
       m3 <- cache.getMeta(keyUser1)
@@ -244,7 +259,7 @@ class CacheTests extends CatsEffectSuite {
              m2.map(_.tsLru) < m3.map(_.tsLru)
     )
       ).map { s =>
-      assertEquals(s, (Some(4),true,true,true,true))
+      assertEquals(s, (Some(8),true,true,true,true))
     }
   }
 
@@ -277,9 +292,8 @@ class CacheTests extends CatsEffectSuite {
       _ <- cache.get(key)
       mAfter3Sec <- cache.getMeta(key)
     } yield (
-        mAfter1Sec.flatMap(c => mBefore.map(a => (c.tsLru - a.tsCreate) > 1000L && (c.tsLru - a.tsCreate) < 1200L)),
-        mAfter3Sec.flatMap(c => mAfter1Sec.map(a => (c.tsLru - a.tsLru) > 3000L && (c.tsLru - a.tsLru) < 3200L ))
-    )
+        mAfter1Sec.flatMap(c => mBefore.map(a => (c.tsLru - a.tsCreate) > 1000000L && (c.tsLru - a.tsCreate) < 1200000L)),
+        mAfter3Sec.flatMap(c => mAfter1Sec.map(a => (c.tsLru - a.tsLru) > 3000000L && (c.tsLru - a.tsLru) < 3200000L )))
       ).map(s => assertEquals(s, (Some(true),Some(true))))
   }
 
