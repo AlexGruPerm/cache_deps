@@ -121,7 +121,7 @@ class CacheTests extends CatsEffectSuite {
       _ <- IO.sleep(2.seconds)
       cacheSizeAfter <- cache.size()
       _ <- cache.dependsChanged(1.seconds,funcChangeChecker2).foreverM.start
-      _ <- IO.sleep(1.seconds)
+      _ <- IO.sleep(2.seconds)
       cacheSizeAfter2 <- cache.size()
     } yield (cacheSizeBefore,cacheSizeAfter,cacheSizeAfter2)).map(res => assertEquals(res, (3,1,0)))
   }
@@ -403,12 +403,14 @@ class CacheTests extends CatsEffectSuite {
              h2.size,
              h1.get("t_sys").map(_.tsLastChange) < h2.get("t_sys").map(_.tsLastChange),
              h1.get("t_sys").map(_.changeCount) < h2.get("t_sys").map(_.changeCount),
-             h3.get("t_users").map(_.changeCount) > h3.get("t_sys").map(_.changeCount),
+             h3.get("t_users").map(_.changeCount) , h3.get("t_sys").map(_.changeCount),
              (h4.get("t_session").map(_.changeCount) > h4.get("t_users").map(_.changeCount) &&
                h4.get("t_session").map(_.tsLastChange) > h4.get("t_users").map(_.tsLastChange)
                ),
              cacheDepends3.size,
-             h5.size
+             h5.size,
+            h4.get("t_session").map(_.changeCount),
+            h4.get("xxx").map(_.changeCount)
     )).map { res =>
       assertEquals(res, (
               0, // empty cache 0 elements in history deps.
@@ -419,10 +421,12 @@ class CacheTests extends CatsEffectSuite {
               4, // h2.size
               true,
               true,
-              true,
+              Some(1),Some(1),
               true,
               0, // empty cache
-              6
+              6,
+              Some(2),
+              Some(1)
       ))
     }
   }
@@ -443,23 +447,23 @@ class CacheTests extends CatsEffectSuite {
     }
   }
 
-  test("19.5) changeCount of one element from 1 added entity in cache".only) {
+  test("19.5) changeCount of one element from 1 added entity in cache") {
     val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
     val funcChange1: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys").pure[IO]
     (for {
       cache <- createAndGetCache[User]
       _ <- cache.save(user1.toList)
-      _ <- cache.dependsChanged(1.seconds, funcChange1).foreverM.start
-      _ <- IO.sleep(10.seconds)
+      fiber <- cache.dependsChanged(1.seconds, funcChange1).foreverM.start
+      _ <- IO.sleep(3.seconds) *> fiber.cancel
       h1 <- cache.getHistDepends
     } yield
       h1.get("t_sys").map(_.changeCount)
     ).map { res =>
-      assertEquals(res, Some(1))
+      assertEquals(res, Some(2))
     }
   }
 
-/*  test("19.6) tsLastChange of one object in histDepChanges".only) {
+  test("19.6) tsLastChange of one object in histDepChanges") {
     val funcChange1: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys","t_users","t_roles").pure[IO]
     val user1 = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
     (for {
@@ -468,9 +472,8 @@ class CacheTests extends CatsEffectSuite {
       _ <- cache.save(user1.toList)
       h1 <- cache.getHistDepends
       fiber1 <- cache.dependsChanged(1.seconds, funcChange1).foreverM.start
-      _ <- IO.sleep(2.seconds)
+      _ <- IO.sleep(3.seconds) *> fiber1.cancel
       h2 <- cache.getHistDepends
-      _ <- fiber1.cancel
     } yield (
       h0.get("t_sys").map(_.changeCount),
       h0.size,
@@ -479,10 +482,10 @@ class CacheTests extends CatsEffectSuite {
       h2.get("t_sys").map(_.changeCount)
     )).map { res =>
       assertEquals(
-        res, (None, 0, 2, Some(0), 4, Some(3))
+        res, (None, 0, 2, Some(0), 4, Some(2))
       )
     }
-  }*/
+  }
 
 
 }

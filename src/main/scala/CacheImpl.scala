@@ -1,9 +1,6 @@
-import CacheDataModel.CacheEntity
-import cats.effect.IO.sleep
-import cats.effect.{IO, Sync}
-import cats.effect.kernel.Ref
+import cats.effect.{IO}
+import cats.effect.kernel.{Ref, Temporal}
 import cats.syntax.all._
-//import Common.currentTime
 import Common.currTimeMcSec
 
 import scala.concurrent.duration.FiniteDuration
@@ -23,7 +20,7 @@ object CacheImpl{
    * )
    * and cache elements.
    */
-  class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Sync[F]) {
+  class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Temporal[F]) {
 
     //todo: try replace CacheEntity to A everywhere down
 
@@ -146,12 +143,12 @@ object CacheImpl{
      */
     def dependsChanged(delay: FiniteDuration, f: => IO[Unit] => F[SetDependObjectName]): F[Unit] =
       for {
-        _ <- sleep(delay).pure[F]
-        //seq <- f(().pure[IO])//todo:#
-        //depExistsHist <- dependsExistsHist(seq)//todo:#
-        _ <- updateDepHistory(Set[DependObjectName]("t_sys")/*seq*/)//.whenA(depExistsHist) //todo:#
-        //depExists <- dependsExists(seq)
-        //_ <- maintenance(seq).whenA(depExists)
+        _ <- Temporal[F].sleep(delay)
+        seq <- f(().pure[IO])
+        depExistsHist <- dependsExistsHist(seq)
+        _ <- updateDepHistory(seq).whenA(depExistsHist)
+        depExists <- dependsExists(seq)
+        _ <- maintenance(seq).whenA(depExists)
         _ <- dependsChanged(delay, f)
       } yield ()
 
