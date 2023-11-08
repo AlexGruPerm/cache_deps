@@ -6,14 +6,8 @@ import cats.effect.IO.sleep
 import munit.CatsEffectSuite
 import cats.syntax.all._
 import cats.effect.kernel.Ref
-import org.junit.Ignore
-import cats.effect._
-import cats.syntax.all._
-
 import java.util.concurrent.TimeUnit
-import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
-
 
 class CacheTests extends CatsEffectSuite {
 
@@ -152,7 +146,6 @@ class CacheTests extends CatsEffectSuite {
     } yield (cacheSize,element)).map(s => assertEquals(s, (4,Some(user))))
   }
 
-
   test("11) counterGet = 0 and then 1 for newly added element with first getting.") {
     val user = CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))
     val keyUser = user.hashCode()
@@ -266,7 +259,6 @@ class CacheTests extends CatsEffectSuite {
     }
   }
 
-
   test("15) None tsCreateTime on empty Cache") {
     val user = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
     val key = user.hashCode()
@@ -279,8 +271,6 @@ class CacheTests extends CatsEffectSuite {
       assertEquals(s,(0, None)))
   }
 
-  //  test("xyz".ignore)
-  //  test("xyz".only)
   test("16) get entity lifetime > 1 sec., > 3 sec.") {
     val user = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
     val key = user.hashCode()
@@ -348,5 +338,151 @@ class CacheTests extends CatsEffectSuite {
       assertEquals(res, (3,3,0, 3,3 ))
     }
   }
+
+  test("19.1) Count of total objects in histDepChanges, without cache.dependsChanged") {
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session","t_users","t_roles"))
+    val user2 = CacheEntity(User(2, "Mary", 44), Set("t_sys", "t_session","t_users","t_roles","t_users_roles","t_oiv"))
+    val user3 = CacheEntity(User(3, "Alex", 54), Set("t_area","t_city","t_sys", "t_session"))
+
+    (for {
+      cache <- createAndGetCache[User]
+      h0 <- cache.getHistDepends
+      _ <- cache.save(user1.toList)
+      cacheDepends1 <- cache.getDepends
+      h1 <- cache.getHistDepends
+      _ <- cache.save(user2.toList)
+      h2 <- cache.getHistDepends
+      _ <- cache.save(user3.toList)
+      h3 <- cache.getHistDepends
+      _ <- List(user1,user2,user3).map(user => cache.remove(user.hashCode())).sequence.map(_ => ())
+      cacheDepends2 <- cache.getDepends
+      h4 <- cache.getHistDepends
+    } yield (cacheDepends1, cacheDepends1.size, h0.size, h1.size, h2.size, h3.size, cacheDepends2.size, h4.size
+    )).map { res =>
+      assertEquals(res, (
+        Set("t_sys", "t_session","t_users","t_roles"), 4, 0, 4, 6, 8, 0, 8
+      ))
+    }
+  }
+
+  test("19.2) Count of total objects in histDepChanges, with cache.dependsChanged") {
+    val funcChange1: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys", "t_session").pure[IO]
+    val funcChange2: IO[Unit] => IO[SetDependObjectName] = _ => Set(                      "t_users").pure[IO]
+    val funcChange3: IO[Unit] => IO[SetDependObjectName] = _ => Set(         "t_session","xxx","yyy").pure[IO]
+
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session", "t_users", "t_roles"))
+
+    (for {
+      cache <- createAndGetCache[User]
+      h0 <- cache.getHistDepends
+      _ <- cache.save(user1.toList)
+      cacheDepends1 <- cache.getDepends
+      h1 <- cache.getHistDepends
+      fiber1 <- cache.dependsChanged(1.seconds, funcChange1).foreverM.start
+      //at this moment user1 removed from Cache(by "t_sys", "t_session") and this 2 deps. updated in histDepChanges
+      _ <- IO.sleep(2.seconds) *> fiber1.cancel
+      cacheDepends2 <- cache.getDepends //0
+      h2 <- cache.getHistDepends //4
+
+      fiber2 <- cache.dependsChanged(1.seconds, funcChange2).foreverM.start
+      _ <- IO.sleep(2.seconds) *> fiber2.cancel
+      h3 <- cache.getHistDepends
+
+      fiber3 <- cache.dependsChanged(1.seconds, funcChange3).foreverM.start
+      _ <- IO.sleep(2.seconds) *> fiber3.cancel
+      h4 <- cache.getHistDepends
+
+      cacheDepends3 <- cache.getDepends
+      h5 <- cache.getHistDepends
+
+    } yield (h0.size,
+             cacheDepends1,
+             cacheDepends1.size /*1 user in Cache has 4 depends*/,
+             h1.size,
+             cacheDepends2.size/*user removed from cache*/,
+             h2.size,
+             h1.get("t_sys").map(_.tsLastChange) < h2.get("t_sys").map(_.tsLastChange),
+             h1.get("t_sys").map(_.changeCount) < h2.get("t_sys").map(_.changeCount),
+             h3.get("t_users").map(_.changeCount) > h3.get("t_sys").map(_.changeCount),
+             (h4.get("t_session").map(_.changeCount) > h4.get("t_users").map(_.changeCount) &&
+               h4.get("t_session").map(_.tsLastChange) > h4.get("t_users").map(_.tsLastChange)
+               ),
+             cacheDepends3.size,
+             h5.size
+    )).map { res =>
+      assertEquals(res, (
+              0, // empty cache 0 elements in history deps.
+              Set("t_sys", "t_session", "t_users", "t_roles"),
+              4, // 4 depends. look Set
+              4, // this 4 elements in
+              0, // cacheDepends2.size
+              4, // h2.size
+              true,
+              true,
+              true,
+              true,
+              0, // empty cache
+              6
+      ))
+    }
+  }
+
+  test("19.4) changeCount of one element from 1 added entity in cache") {
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(user1.toList)
+      h1 <- cache.getHistDepends
+    } yield (
+      h1.size,
+      h1.get("t_sys").map(_.changeCount)
+    )).map { res =>
+      assertEquals(
+        res, (1,Some(0))
+      )
+    }
+  }
+
+  test("19.5) changeCount of one element from 1 added entity in cache".only) {
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
+    val funcChange1: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys").pure[IO]
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(user1.toList)
+      _ <- cache.dependsChanged(1.seconds, funcChange1).foreverM.start
+      _ <- IO.sleep(10.seconds)
+      h1 <- cache.getHistDepends
+    } yield
+      h1.get("t_sys").map(_.changeCount)
+    ).map { res =>
+      assertEquals(res, Some(1))
+    }
+  }
+
+/*  test("19.6) tsLastChange of one object in histDepChanges".only) {
+    val funcChange1: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys","t_users","t_roles").pure[IO]
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys", "t_session"))
+    (for {
+      cache <- createAndGetCache[User]
+      h0 <- cache.getHistDepends
+      _ <- cache.save(user1.toList)
+      h1 <- cache.getHistDepends
+      fiber1 <- cache.dependsChanged(1.seconds, funcChange1).foreverM.start
+      _ <- IO.sleep(2.seconds)
+      h2 <- cache.getHistDepends
+      _ <- fiber1.cancel
+    } yield (
+      h0.get("t_sys").map(_.changeCount),
+      h0.size,
+      h1.size, h1.get("t_sys").map(_.changeCount), // 2 elements in hist from user1, no counter!
+      h2.size, // 2 elements in hist from user1 and 2 additionally from funcChange1
+      h2.get("t_sys").map(_.changeCount)
+    )).map { res =>
+      assertEquals(
+        res, (None, 0, 2, Some(0), 4, Some(3))
+      )
+    }
+  }*/
+
 
 }

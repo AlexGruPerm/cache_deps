@@ -10,6 +10,7 @@ import scala.concurrent.duration.FiniteDuration
 
 object CacheImpl{
   import CacheDataModel._
+
   /**
    * A type [A] describe the whole Cache object.
    * Cache contains meta information (like:
@@ -24,8 +25,13 @@ object CacheImpl{
    */
   class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Sync[F]) {
 
+    //todo: try replace CacheEntity to A everywhere down
+
     def getDepends: F[SetDependObjectName] =
       ref.get.map(_.depends)
+
+    def getHistDepends: F[Map[DependObjectName,HistDepChanges]] =
+      ref.get.map(_.histDepChanges)
 
     private def saveMetaForGet(key: Int): F[Unit] =
       for {
@@ -64,7 +70,15 @@ object CacheImpl{
             cacheEntitiesMeta.updated(entityToSave.hashCode(),
               CacheEntityMeta(ct.length, ct.length))
         }
-        _ <- ref.set(cache.copy(entities= updatedEntities,entitiesMeta = updatedEntitiesMeta))
+        histDeps = entities.foldLeft(Set.empty[DependObjectName]) {
+          case (r, c) => c.depends.foldLeft(r)(_ + _)
+        }
+        updatedHist = histDeps.foldLeft(cache.histDepChanges) {
+            case (r, c) => r.updated(c, HistDepChanges(0, ct.length))
+          }
+        _ <- ref.set(cache.copy(entities= updatedEntities,
+                                entitiesMeta = updatedEntitiesMeta,
+                                histDepChanges = updatedHist))
       } yield ()
 
     def size(): F[Int] =
@@ -88,6 +102,24 @@ object CacheImpl{
         _ <- ref.set(cache.copy(entities = newEntities))
       } yield ()
 
+    /**
+     * Update history information about depend object changes.
+    */
+    private def updateDepHistory(set: SetDependObjectName): F[Unit] =
+      for {
+        ct <- currTimeMcSec
+        cache <- ref.get
+        updatedDepHistory = set.foldLeft(cache.histDepChanges){
+          case (hist, changedDep) =>
+              val ch: HistDepChanges = hist.getOrElse(key = changedDep, default = HistDepChanges(0,ct.length))
+              hist + (changedDep ->
+                HistDepChanges(
+                changeCount = ch.changeCount + 1,
+                tsLastChange = ct.length
+              ))
+        }
+        _ <- ref.set(cache.copy(histDepChanges = updatedDepHistory))
+      } yield ()
 
     /**
      * Return true if in the Cache.depends exist at least one element from set (list of changed objects)
@@ -99,15 +131,27 @@ object CacheImpl{
       } yield isExist
 
     /**
+     * Return true if in the Cache.histDepChanges exist at least one element from set (list of changed objects)
+     */
+    private def dependsExistsHist(set: SetDependObjectName): F[Boolean] =
+      for {
+        cache <- ref.get
+        dependencies = cache.histDepChanges.keySet
+        isExist = set.exists(ch => dependencies.contains(ch))
+      } yield isExist
+
+    /**
      * Repeat function f with delay and if it returns non empty Set
      * make some maintenance actions (F.e. clean Cache from some elements - CacheEntity).
      */
-    def dependsChanged(delay: FiniteDuration, f: IO[Unit] => F[SetDependObjectName]): F[Unit] =
+    def dependsChanged(delay: FiniteDuration, f: => IO[Unit] => F[SetDependObjectName]): F[Unit] =
       for {
         _ <- sleep(delay).pure[F]
-        seq <- f(().pure[IO])
-        depExists <- dependsExists(seq)
-        _ <- maintenance(seq).whenA(depExists)
+        //seq <- f(().pure[IO])//todo:#
+        //depExistsHist <- dependsExistsHist(seq)//todo:#
+        _ <- updateDepHistory(Set[DependObjectName]("t_sys")/*seq*/)//.whenA(depExistsHist) //todo:#
+        //depExists <- dependsExists(seq)
+        //_ <- maintenance(seq).whenA(depExists)
         _ <- dependsChanged(delay, f)
       } yield ()
 
