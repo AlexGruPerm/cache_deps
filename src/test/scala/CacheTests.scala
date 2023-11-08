@@ -1,4 +1,4 @@
-import cd.CacheDataModel.{Cache, CacheEntity, SetDependObjectName}
+import cd.CacheDataModel.{_}
 import cd.CacheImpl.RefCache
 import cd.Common.currTimeMcSec
 import cats.effect.IO
