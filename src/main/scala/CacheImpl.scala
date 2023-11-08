@@ -1,12 +1,12 @@
 import cats.effect.{IO}
 import cats.effect.kernel.{Ref, Temporal}
 import cats.syntax.all._
-import Common.currTimeMcSec
 
 import scala.concurrent.duration.FiniteDuration
 
 object CacheImpl{
   import CacheDataModel._
+  import Common._
 
   /**
    * A type [A] describe the whole Cache object.
