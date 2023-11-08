@@ -1,3 +1,5 @@
+package cd
+
 import scala.collection.immutable.IntMap
 import scala.language.implicitConversions
 

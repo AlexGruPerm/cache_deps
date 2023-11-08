@@ -1,12 +1,14 @@
-import cats.effect.{IO}
+package cd
+
+import cats.effect.IO
 import cats.effect.kernel.{Ref, Temporal}
 import cats.syntax.all._
+import cd.Common._
 
 import scala.concurrent.duration.FiniteDuration
 
 object CacheImpl{
-  import CacheDataModel._
-  import Common._
+  import cd.CacheDataModel._
 
   /**
    * A type [A] describe the whole Cache object.
