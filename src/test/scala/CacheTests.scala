@@ -57,9 +57,12 @@ class CacheTests extends CatsEffectSuite {
     (for {
       cache <- createAndGetCache[User]
       _ <- cache.save(users)
+      cacheSize1 <- cache.size()
+      _ <- cache.remove(users.head.hashCode())
+      cacheSize2 <- cache.size()
       _ <- users.map(user => cache.remove(user.hashCode())).sequence.map(_ => ())
-      cacheSize <- cache.size()
-    } yield cacheSize).map(s => assertEquals(s, 0))
+      cacheSize3 <- cache.size()
+    } yield (cacheSize1,cacheSize2,cacheSize3)).map(s => assertEquals(s, (3,2,0)))
   }
 
   test("4) get method in empty Cache.") {

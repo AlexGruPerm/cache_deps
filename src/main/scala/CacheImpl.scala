@@ -28,20 +28,19 @@ object CacheImpl{
       ref.get.map(_.depends)
 
     private def saveMetaForGet(key: Int): F[Unit] =
-      currTimeMcSec.flatMap { ct =>
-        ref.get.flatMap { cache =>
-          ref.set {
-            cache.copy(
-              entitiesMeta = cache.entitiesMeta.get(key).foldLeft(cache.entitiesMeta) {
-                case (cacheEntitiesMeta, entityMetaToSave) =>
-                  cacheEntitiesMeta.updated(key,
-                    entityMetaToSave.copy(counterGet = entityMetaToSave.counterGet + 1,
-                      tsLru = ct.length))
-              }
-            )
+      for {
+        ct <- currTimeMcSec
+        cache <- ref.get
+        entitiesMeta = cache.entitiesMeta.get(key)
+        updatedEntitiesMeta = entitiesMeta.foldLeft(cache.entitiesMeta) {
+            case (cacheEntitiesMeta, entityMetaToSave) =>
+              cacheEntitiesMeta.updated(key,
+                entityMetaToSave.copy(
+                  counterGet = entityMetaToSave.counterGet + 1,
+                  tsLru = ct.length))
           }
-        }
-      }
+        _ <- ref.set(cache.copy(entitiesMeta = updatedEntitiesMeta))
+      } yield ()
 
     def get(key: Int): F[Option[CacheEntity[B]]] =
       for {
@@ -53,31 +52,29 @@ object CacheImpl{
       ref.get.map(_.entitiesMeta.get(key))
 
     def save(entities: Seq[CacheEntity[B]]): F[Unit] =
-      currTimeMcSec[F].flatMap { ct =>
-      ref.get.flatMap { cache =>
-        ref.set {
-          cache.copy(
-            entities = entities.foldLeft(cache.entities){
-              case (cacheEntities,entityToSave) =>
-                cacheEntities.updated(entityToSave.hashCode(),entityToSave)
-            },
-            entitiesMeta = entities.foldLeft(cache.entitiesMeta) {
-              case (cacheEntitiesMeta, entityToSave) =>
-                cacheEntitiesMeta.updated(entityToSave.hashCode(),
-                  CacheEntityMeta(ct.length,ct.length))
-            }
-          )
-        }}}
+      for {
+        ct <- currTimeMcSec
+        cache <- ref.get
+        updatedEntities = entities.foldLeft(cache.entities) {
+          case (cacheEntities, entityToSave) =>
+            cacheEntities.updated(entityToSave.hashCode(), entityToSave)
+        }
+        updatedEntitiesMeta = entities.foldLeft(cache.entitiesMeta) {
+          case (cacheEntitiesMeta, entityToSave) =>
+            cacheEntitiesMeta.updated(entityToSave.hashCode(),
+              CacheEntityMeta(ct.length, ct.length))
+        }
+        _ <- ref.set(cache.copy(entities= updatedEntities,entitiesMeta = updatedEntitiesMeta))
+      } yield ()
 
     def size(): F[Int] =
       ref.get.map(_.entities.size)
 
     def remove(key: Int): F[Unit] =
-      ref.get.flatMap{cache =>
-        ref.set{
-          cache.copy(entities = cache.entities - key)
-        }
-      }
+      for {
+        cache <- ref.get
+        _ <- ref.set(cache.copy(entities = cache.entities - key))
+      } yield ()
 
     /**
      * Receive set of changed object from "external system" and remove related CacheEntity
@@ -93,7 +90,7 @@ object CacheImpl{
 
 
     /**
-     * Return true if in Cache.depends exist at least one element from set (list of changed objects)
+     * Return true if in the Cache.depends exist at least one element from set (list of changed objects)
     */
     private def dependsExists(set: SetDependObjectName): F[Boolean] =
       for {
