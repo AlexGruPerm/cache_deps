@@ -9,21 +9,21 @@ val root = (project in file("."))
             scalaVersion := Versions.scala,
             //---------------------------------------------------------------
             organization := "io.github.alexgruperm",
-            homepage := Some(url("https://github.com/AlexGruPerm/cache_deps")),
+/*            homepage := Some(url("https://github.com/AlexGruPerm/cache_deps")),
             scmInfo := Some(ScmInfo(url("https://github.com/AlexGruPerm/cache_deps"), "git@github.com:alexgruperm/cache_deps.git")),
-            developers := List(Developer("AlexGruPerm", "Yakushev Aleksey", "ugr@bk.ru", url("https://github.com/AlexGruPerm"))),
-            publishMavenStyle := true,
+            developers := List(Developer("AlexGruPerm", "Yakushev Aleksey", "ugr@bk.ru", url("https://github.com/AlexGruPerm"))),*/
+/*            publishMavenStyle := true,*/
             crossPaths := true,
-            versionScheme := Some("early-semver"),
+/*            versionScheme := Some("early-semver"),
             publishTo := {
               val nexus = "https://oss.sonatype.org/"
               if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
               else Some("releases" at nexus + "service/local/staging/deploy/maven2")
-            },
+            },*/
             //---------------------------------------------------------------
-            assembly / assemblyJarName := "cache-deps.jar",
-            assembly / test := Def.sequential(Test / test).value,
-            scalafmtOnCompile := false,
+            //assembly / assemblyJarName := "cache-deps.jar",
+            //assembly / test := Def.sequential(Test / test).value,
+            //scalafmtOnCompile := false,
             libraryDependencies ++= (dependencies ++ testDependencies)
     )
 
