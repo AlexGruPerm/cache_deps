@@ -29,7 +29,7 @@ val root = (project in file("."))
 
 connectInput / run := true
 
-import ReleaseTransformations._
+/*import ReleaseTransformations._
 releaseCrossBuild := true
 releaseProcess := Seq[ReleaseStep](
         checkSnapshotDependencies, // check that there are no SNAPSHOT dependencies
@@ -45,4 +45,4 @@ releaseProcess := Seq[ReleaseStep](
         releaseStepCommand("sonatypeRelease"), // run sonatypeRelease and publish to maven central
         pushChanges // push changes to git
 )
-
+*/
