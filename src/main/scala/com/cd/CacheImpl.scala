@@ -8,19 +8,6 @@ import com.cd.Common.currTimeMcSec
 
 import scala.concurrent.duration.FiniteDuration
 
-
-object Common {
-
-  /**
-   * Return time as MICROSECONDS
-   */
-  def currTimeMcSec[F[_]](implicit F: Temporal[F], clock: Clock[F]): F[FiniteDuration] =
-    for {
-      time <- clock.realTime
-    } yield time
-
-}
-
 object CacheImpl{
 
   /**
@@ -36,7 +23,6 @@ object CacheImpl{
    * and cache elements.
    */
   class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Temporal[F]) {
-
     //todo: try replace CacheEntity to A everywhere down
 
     def getDepends: F[SetDependObjectName] =
