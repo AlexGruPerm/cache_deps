@@ -1,4 +1,4 @@
-import com.cd.CacheDataModel.{_}
+import com.cd.CacheDataModel._
 import com.cd.CacheImpl.RefCache
 import com.cd.Common.currTimeMcSec
 import cats.effect.IO
@@ -6,6 +6,7 @@ import cats.effect.IO.sleep
 import munit.CatsEffectSuite
 import cats.syntax.all._
 import cats.effect.kernel.Ref
+
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
 
@@ -483,6 +484,39 @@ class CacheTests extends CatsEffectSuite {
     )).map { res =>
       assertEquals(
         res, (None, 0, 2, Some(0), 4, Some(2))
+      )
+    }
+  }
+
+  test("19.7) tsLastChange of one object in histDepChanges") {
+    val funcChange1: IO[Unit] => IO[SetDependObjectName] = _ => Set("t_sys").pure[IO]
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(user1.toList)
+      fiber1 <- cache.dependsChanged(250.milliseconds, funcChange1).foreverM.start
+      _ <- IO.sleep(2.seconds + 250.milliseconds)
+      h_a2s <- cache.getHistDepends
+      _ <- IO.sleep(1.seconds)
+      h_a3s <- cache.getHistDepends
+      h2t = h_a2s.get("t_sys").map(_.tsLastChange)
+      h3t = h_a3s.get("t_sys").map(_.tsLastChange)
+      diff  = h3t.get - h2t.get
+      _ <- IO.sleep(500.milliseconds)
+      h_a4s <- cache.getHistDepends
+      h4t = h_a4s.get("t_sys").map(_.tsLastChange)
+      diff2  = h4t.get - h3t.get
+      _ <- fiber1.cancel
+    } yield (
+       (h_a2s.get("t_sys").map(_.changeCount),
+        h_a3s.get("t_sys").map(_.changeCount),
+         h_a2s.get("t_sys").map(_.tsLastChange) < h_a3s.get("t_sys").map(_.tsLastChange),
+          diff  > 1000000L && diff  < 1100000L, // ~ 1 second
+          diff2 >  500000L && diff2 < 550000L   // ~ 0.5 second
+        )
+    )).map { res =>
+      assertEquals(
+        res, (Some(8),Some(12),true,true,true)
       )
     }
   }
