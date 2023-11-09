@@ -162,7 +162,7 @@ class CacheTests extends CatsEffectSuite {
   }
 
   test("12) counterGet = 5 for repeating cache.get(keyUser).") {
-    val user = CacheEntity(User(10, "John", 64), Set("t_sys", "t_session"))
+    val user = CacheEntity(User(11, "John", 64), Set("t_sys", "t_session"))
     val keyUser = user.hashCode()
     (for {
       cache <- createAndGetCache[User]
