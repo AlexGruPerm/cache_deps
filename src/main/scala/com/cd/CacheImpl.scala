@@ -1,12 +1,25 @@
 package com.cd
 
-import cats.effect.IO
+import cats.effect.{Clock, IO}
 import cats.effect.kernel.{Ref, Temporal}
 import cats.syntax.all._
 import com.cd.CacheDataModel.{Cache, CacheEntity, CacheEntityMeta, DependObjectName, HistDepChanges, SetDependObjectName}
 import com.cd.Common.currTimeMcSec
 
 import scala.concurrent.duration.FiniteDuration
+
+
+object Common {
+
+  /**
+   * Return time as MICROSECONDS
+   */
+  def currTimeMcSec[F[_]](implicit F: Temporal[F], clock: Clock[F]): F[FiniteDuration] =
+    for {
+      time <- clock.realTime
+    } yield time
+
+}
 
 object CacheImpl{
 
