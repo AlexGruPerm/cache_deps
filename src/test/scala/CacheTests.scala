@@ -1,6 +1,6 @@
-import cd.CacheDataModel.{_}
-import cd.CacheImpl.RefCache
-import cd.Common.currTimeMcSec
+import com.cd.CacheDataModel.{_}
+import com.cd.CacheImpl.RefCache
+import com.cd.Common.currTimeMcSec
 import cats.effect.IO
 import cats.effect.IO.sleep
 import munit.CatsEffectSuite
