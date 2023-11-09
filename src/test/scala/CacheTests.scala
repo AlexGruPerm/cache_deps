@@ -522,4 +522,33 @@ class CacheTests extends CatsEffectSuite {
   }
 
 
+  test("20) Check changes tsLru of CacheEntity") {
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
+    val key1 = user1.hashCode()
+    val user2 = CacheEntity(User(2, "Mary", 24), Set("t_users"))
+    val key2 = user2.hashCode()
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(List(user1,user2))
+      u1 <- cache.get(key1)
+      m1 <- cache.getMeta(key1)
+      _ <- cache.get(key1)
+      m2 <- cache.getMeta(key1)
+      m3 <- cache.getMeta(key1)
+    } yield
+      (
+        u1.get,m1.get.tsLru > m1.get.tsCreate,m1.get.counterGet,
+        m1.get.tsCreate == m2.get.tsCreate, m2.get.tsLru > m1.get.tsLru,
+        m2.get.tsLru - m1.get.tsLru < 100000L,
+        m2 == m3
+      )).map { res =>
+      assertEquals(
+        res, (user1,true,1,
+              true,true,true,
+              true
+        )
+      )
+    }
+  }
+
 }
