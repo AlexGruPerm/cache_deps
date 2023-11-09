@@ -1,5 +1,6 @@
 package com.cd
 
+import cats.effect.implicits.genSpawnOps
 import cats.effect.{Clock, IO}
 import cats.effect.kernel.{Ref, Temporal}
 import cats.syntax.all._
@@ -48,7 +49,7 @@ object CacheImpl{
 
     def get(key: Int): F[Option[CacheEntity[B]]] =
       for {
-       ce <- ref.get.map(cache => cache.entities.get(key))
+        ce <- ref.get.map(cache => cache.entities.get(key))
         _ <- saveMetaForGet(key).whenA(ce.isDefined)
       } yield ce
 

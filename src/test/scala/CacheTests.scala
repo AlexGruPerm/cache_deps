@@ -521,7 +521,6 @@ class CacheTests extends CatsEffectSuite {
     }
   }
 
-
   test("20) Check changes tsLru of CacheEntity") {
     val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
     val key1 = user1.hashCode()
@@ -547,6 +546,55 @@ class CacheTests extends CatsEffectSuite {
               true,true,true,
               true
         )
+      )
+    }
+  }
+
+  test("21) getCount 3 and 10") {
+    val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
+    val key1 = user1.hashCode()
+    val user2 = CacheEntity(User(2, "Mary", 24), Set("t_users"))
+    val key2 = user2.hashCode()
+    val user3 = CacheEntity(User(3, "Alex", 25), Set("t_users"))
+    val key3 = user3.hashCode()
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(List(user1, user2, user3))
+      _ <- (1 to 5).toList.map(_ => cache.get(key1)).sequence.map(_ => ())
+      _ <- (1 to 10).toList.map(_ => cache.get(key2)).sequence.map(_ => ())
+      m0 <- cache.getMeta(key3)
+      m1 <- cache.getMeta(key1)
+      m2 <- cache.getMeta(key2)
+    } yield
+      (
+        m0.get.counterGet,
+        m1.get.counterGet,
+        m2.get.counterGet
+      )).map { res =>
+      assertEquals(
+        res, (
+          0,5,10
+        )
+      )
+    }
+  }
+
+  test("22) How many gets in interval") {
+    val user = CacheEntity(User(1, "John", 34), Set("t_sys"))
+    val key = user.hashCode()
+    (for {
+      cache <- createAndGetCache[User]
+      _ <- cache.save(user.toList)
+      fgets = (1 to 100000).toList.map(_ => cache.get(key)).sequence.map(_ => ())
+      fiber <- fgets.foreverM.start
+      _ <- IO.sleep(1.seconds) *> fiber.cancel
+      m <- cache.getMeta(key)
+    } yield
+      (
+        m.get.counterGet > 500000
+      )).map { res =>
+      assertEquals(
+        res, (true)
       )
     }
   }
