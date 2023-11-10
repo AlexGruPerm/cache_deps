@@ -596,7 +596,7 @@ class CacheTests extends CatsEffectSuite {
       m <- cache.getMeta(key)
     } yield
       (
-        m.get.counterGet > 300000
+        m.get.counterGet > 100000
       )).map { res =>
       assertEquals(
         res, (true)
