@@ -1,7 +1,7 @@
 package com.cd
 
-import cats.effect.implicits.genSpawnOps
-import cats.effect.{Clock, IO}
+//import cats.effect.implicits.genSpawnOps
+import cats.effect.{IO}
 import cats.effect.kernel.{Ref, Temporal}
 import cats.syntax.all._
 import com.cd.CacheDataModel.{Cache, CacheEntity, CacheEntityMeta, DependObjectName, HistDepChanges, SetDependObjectName}

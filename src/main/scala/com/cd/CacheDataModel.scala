@@ -1,7 +1,7 @@
 package com.cd
 
 import scala.collection.immutable.IntMap
-import scala.language.implicitConversions
+//import scala.language.implicitConversions
 
 object CacheDataModel {
   type TimeStamp = Long
