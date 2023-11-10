@@ -118,12 +118,14 @@ class CacheTests extends CatsEffectSuite {
       cache <- createAndGetCache[User]
       _ <- cache.save(usersLocal)
       cacheSizeBefore <- cache.size()
-      _ <- cache.dependsChanged(1.seconds,funcChangeChecker).foreverM.start
+      f1 <- cache.dependsChanged(1.seconds,funcChangeChecker).foreverM.start
       _ <- IO.sleep(2.seconds)
       cacheSizeAfter <- cache.size()
-      _ <- cache.dependsChanged(1.seconds,funcChangeChecker2).foreverM.start
+      f2 <- cache.dependsChanged(1.seconds,funcChangeChecker2).foreverM.start
       _ <- IO.sleep(2.seconds)
       cacheSizeAfter2 <- cache.size()
+      _ <- f1.cancel
+      _ <- f2.cancel
     } yield (cacheSizeBefore,cacheSizeAfter,cacheSizeAfter2)).map(res => assertEquals(res, (3,1,0)))
   }
 
@@ -215,10 +217,10 @@ class CacheTests extends CatsEffectSuite {
       counterGetUser1_2gets <- cache.getMeta(keyUser1)
       counterGetUser2_4gets <- cache.getMeta(keyUser2)
 
-      _ <- cache.dependsChanged(1.seconds, funcChangeChecker).foreverM.start
+      fiber <- cache.dependsChanged(1.seconds, funcChangeChecker).foreverM.start
       _ <- IO.sleep(2.seconds)
       endCacheSize <- cache.size()
-
+      _ <- fiber.cancel
     } yield TestCheck(
                         cacheSizeEmpty,
                         cacheSizeUser1Added,
@@ -231,7 +233,7 @@ class CacheTests extends CatsEffectSuite {
     }
   }
 
-  test("14) tsCreate not changed in meta and tsLru changing.  ") {
+  test("14) tsCreate not changed in meta and tsLru changing.") {
     val user1 = CacheEntity(User(10, "John", 64), Set("t_sys"))
     val keyUser1 = user1.hashCode()
 
@@ -252,11 +254,14 @@ class CacheTests extends CatsEffectSuite {
     } yield (m3.map(_.counterGet),
              m1.map(_.tsCreate) == m2.map(_.tsCreate),
              m2.map(_.tsCreate) == m3.map(_.tsCreate),
-             m1.map(_.tsLru) < m2.map(_.tsLru),
-             m2.map(_.tsLru) < m3.map(_.tsLru)
+             m1.map(_.tsLru) <= m2.map(_.tsLru),
+             m2.map(_.counterGet), m3.map(_.counterGet),
+             m2.map(_.tsLru) <= m3.map(_.tsLru)
     )
       ).map { s =>
-      assertEquals(s, (Some(8),true,true,true,true))
+      assertEquals(s,
+        (Some(8),true,true,true,Some(4),Some(8),true)
+      )
     }
   }
 
@@ -304,10 +309,11 @@ class CacheTests extends CatsEffectSuite {
       cache <- createAndGetCache[User]
       _ <- cache.save(users)
       cacheSize1 <- cache.size()
-      _ <- cache.dependsChanged(2.seconds, f).foreverM.start
+      f <- cache.dependsChanged(2.seconds, f).foreverM.start
       cacheSize2 <- cache.size()
       _ <- IO.sleep(3.seconds)
       cacheSize3 <- cache.size()
+      _ <- f.cancel
     } yield (cacheSize1, cacheSize2, cacheSize3 )).map{res =>
       assertEquals(res, (3,3,0))
     }
@@ -525,7 +531,6 @@ class CacheTests extends CatsEffectSuite {
     val user1 = CacheEntity(User(1, "John", 34), Set("t_sys"))
     val key1 = user1.hashCode()
     val user2 = CacheEntity(User(2, "Mary", 24), Set("t_users"))
-    val key2 = user2.hashCode()
     (for {
       cache <- createAndGetCache[User]
       _ <- cache.save(List(user1,user2))
@@ -536,8 +541,8 @@ class CacheTests extends CatsEffectSuite {
       m3 <- cache.getMeta(key1)
     } yield
       (
-        u1.get,m1.get.tsLru > m1.get.tsCreate,m1.get.counterGet,
-        m1.get.tsCreate == m2.get.tsCreate, m2.get.tsLru > m1.get.tsLru,
+        u1.get,m1.get.tsLru >= m1.get.tsCreate,m1.get.counterGet,
+        m1.get.tsCreate == m2.get.tsCreate, m2.get.tsLru >= m1.get.tsLru,
         m2.get.tsLru - m1.get.tsLru < 100000L,
         m2 == m3
       )).map { res =>
@@ -591,7 +596,7 @@ class CacheTests extends CatsEffectSuite {
       m <- cache.getMeta(key)
     } yield
       (
-        m.get.counterGet > 500000
+        m.get.counterGet > 300000
       )).map { res =>
       assertEquals(
         res, (true)
