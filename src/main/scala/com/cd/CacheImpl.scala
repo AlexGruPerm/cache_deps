@@ -24,7 +24,6 @@ object CacheImpl{
    * and cache elements.
    */
   class RefCache[F[_],A <: CacheEntity[_],B](ref: Ref[F,Cache[B]])(implicit F: Temporal[F]) {
-    //todo: try replace CacheEntity to A everywhere down
 
     def getDepends: F[SetDependObjectName] =
       ref.get.map(_.depends)
